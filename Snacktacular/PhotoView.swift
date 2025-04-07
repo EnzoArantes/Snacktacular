@@ -10,6 +10,8 @@ import PhotosUI
 
 struct PhotoView: View {
     @State var spot: Spot // passed in from SpotDetailView
+    @State private var photo = Photo()
+    @State private var data = Data()
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var pickerIsPresented = true //TODO: Switch to true
     @State private var selectedImage = Image(systemName: "photo")
@@ -17,9 +19,19 @@ struct PhotoView: View {
 
     var body: some View {
         NavigationStack {
+            
+            Spacer()
+            
             selectedImage
                 .resizable()
                 .scaledToFit()
+            
+            Spacer()
+            
+            TextField("description", text: $photo.description)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            
+            Text("by: \(photo.reviwer), on \(photo.postedOn.formatted(date: .numeric, time: .omitted))")
             
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -29,8 +41,10 @@ struct PhotoView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Save") {
-                            //TODO: Add save code here
-                            dismiss()
+                            Task {
+                                await PhotoViewModel.saveImage(spot: spot, photo: photo, data: data)
+                                dismiss()
+                            }
                         }
                     }
                 }
@@ -43,6 +57,12 @@ struct PhotoView: View {
                                 selectedPhoto?.loadTransferable(type: Image.self) {
                                 selectedImage = image
                             }
+                            
+                            guard let transferredDate = try await selectedPhoto?.loadTransferable(type: Data.self) else {
+                                print("ERROR: COULD NOT CONVERT DATA FROM SELECTED PHOTO")
+                                return
+                            }
+                            data = transferredDate
                         } catch {
                             print("😡 ERROR: Could not create image from selected photo. \(error.localizedDescription)")
                         }

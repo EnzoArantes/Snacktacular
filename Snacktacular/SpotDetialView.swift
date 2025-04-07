@@ -6,13 +6,22 @@
 //
 
 import SwiftUI
+import Firebase
+import FirebaseFirestore
 
 struct SpotDetialView: View {
+    @FirestoreQuery(collectionPath: "spots") var fsPhotos: [Photo]
     @State var spot: Spot // pass in value from ListView
     @State private var photoSheetIsPresented = false
     @State private var showingAlert = false
     @State private var alertMessage = "Cannot add a Photo until you save the Spot."
     @Environment(\.dismiss) private var dismiss
+    private var photos: [Photo] {
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+            return [Photo.preview, Photo.preview, Photo.preview, Photo.preview, Photo.preview, Photo.preview]
+        }
+        return fsPhotos
+    }
     
     var body: some View {
         VStack {
@@ -46,45 +55,65 @@ struct SpotDetialView: View {
             .bold()
             .buttonStyle(.borderedProminent)
             .tint(.snack)
-
             
-            Spacer()
-        }
-        .navigationBarBackButtonHidden()
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") {
-                    dismiss()
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(
+                        photos) { photo in
+                            let url = URL(string: photo.imageURLSTring)
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 80, height: 80)
+                                    .clipped()
+                            } placeholder: {
+                                ProgressView()
+                            }
+                        }
                 }
+                .frame(height: 80)
+                
+                Spacer()
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Save") {
-                    saveSpot()
-                    dismiss()
-                }
+            .navigationBarBackButtonHidden()
+            .task {
+                $fsPhotos.path = "spots/\(spot.id ?? "")/photos"
             }
-        }
-        .alert(alertMessage, isPresented: $showingAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                // We want to return spot.id after saving a new Spot. Right now its nil
-                Task {
-                    guard let id = await SpotViewModel.saveSpot(spot: spot)
-                    else {
-                        print("😡 Error: saving spot in alert returned nil")
-                        return
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
                     }
-                    spot.id = id
-                    print("spot.id: \(id)")
-                    photoSheetIsPresented.toggle()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") {
+                        saveSpot()
+                        dismiss()
+                    }
                 }
             }
-        }
-        .fullScreenCover(isPresented: $photoSheetIsPresented) {
-            PhotoView(spot: spot)
+            .alert(alertMessage, isPresented: $showingAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Save") {
+                    // We want to return spot.id after saving a new Spot. Right now its nil
+                    Task {
+                        guard let id = await SpotViewModel.saveSpot(spot: spot)
+                        else {
+                            print("😡 Error: saving spot in alert returned nil")
+                            return
+                        }
+                        spot.id = id
+                        print("spot.id: \(id)")
+                        photoSheetIsPresented.toggle()
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: $photoSheetIsPresented) {
+                PhotoView(spot: spot)
+            }
         }
     }
-    
     func saveSpot() {
         Task {
             guard let id = await SpotViewModel.saveSpot(spot: spot) else {
@@ -96,9 +125,8 @@ struct SpotDetialView: View {
         }
     }
 }
-
 #Preview {
     NavigationStack {
-        SpotDetialView(spot: Spot())
+        SpotDetialView(spot: Spot.preview)
     }
 }
